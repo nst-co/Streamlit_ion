@@ -21,6 +21,7 @@ import japanize_matplotlib
 import seaborn as sns
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from typing import Tuple
 
 st.set_page_config(
     page_title="異音チェッカー シミュレーション",
@@ -67,6 +68,15 @@ def showWaveSpec(
     return pd.Series(np.max(S, axis=1), index=freq, name=title)
 
 
+def rosa_temp_load_series(file_data) -> Tuple[pd.Series, float]:
+    with TemporaryDirectory() as temp_dir:
+        temp_file_path = Path(temp_dir, file_data.name)
+        temp_file_path.write_bytes(file_data.read())
+        wave, sr = rosa.load(temp_file_path, sr=None)
+    times = pd.Index(np.array(range(len(wave))) / sr, name="time(sec)")
+    return pd.Series(wave, index=times, name=file_data.name), sr
+
+
 st.title("異音チェッカー シミュレーション")
 
 tabOK, tabNG = st.tabs(["🆗 OK", "🆖 NG"])
@@ -83,13 +93,7 @@ with tabOK:
         totalContainer = st.container()
         ss = []
         for uploaded_file in uploaded_ok:
-            st.write("filename:", uploaded_file.name)
-            with TemporaryDirectory() as temp_dir:
-                temp_file_path = Path(temp_dir, uploaded_file.name)
-                temp_file_path.write_bytes(uploaded_file.read())
-                wave, sr = rosa.load(temp_file_path, sr=None)
-            times = pd.Index(np.array(range(len(wave))) / sr, name="time(sec)")
-            ts = pd.Series(wave, index=times, name=uploaded_file.name)
+            ts, sr = rosa_temp_load_series(uploaded_file)
             s = showWaveSpec(ts.values, sr=sr, title=ts.name)
             ss.append(s)
 
@@ -118,13 +122,7 @@ with tabNG:
 
         @st.cache_data
         def ng_wave(uploaded_ng):
-            st.write("filename:", uploaded_ng.name)
-            with TemporaryDirectory() as temp_dir:
-                temp_file_path = Path(temp_dir, uploaded_ng.name)
-                temp_file_path.write_bytes(uploaded_ng.read())
-                wave, sr = rosa.load(temp_file_path, sr=None)
-            times = pd.Index(np.array(range(len(wave))) / sr, name="time(sec)")
-            ts = pd.Series(wave, index=times, name=uploaded_ng.name)
+            ts, sr = rosa_temp_load_series(uploaded_ng)
             return showWaveSpec(ts.values, sr=sr, title=ts.name)
 
         ng = ng_wave(uploaded_ng)
