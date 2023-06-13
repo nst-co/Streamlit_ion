@@ -41,31 +41,11 @@ def plotMod(plt):
     st.pyplot(plt)
 
 
-def showWaveSpec(
+def waveSpec(
     y: np.ndarray, sr: int, frame_length=8192, hop_length=1024, title=None
 ) -> np.ndarray:
     y = y[np.isfinite(y)]  # 有効値のみにする
     S = np.abs(rosa.stft(y, n_fft=frame_length, hop_length=hop_length))  # STFT of y
-    S_db = rosa.amplitude_to_db(S)
-
-    st.write(title)
-    st.audio(y, sample_rate=sr)
-
-    fig, axes = plt.subplots(2, sharex=True, figsize=(12, 4))
-    rosa.display.waveshow(y, sr=sr, axis="time", ax=axes[0])
-    rosa.display.specshow(
-        S_db,
-        sr=sr,
-        hop_length=hop_length,
-        n_fft=frame_length,
-        x_axis="time",
-        y_axis="mel",
-        ax=axes[1],
-    )
-    fig.suptitle(title)
-    plt.subplots_adjust(wspace=0, hspace=0)
-    plt.xlim(0, len(y) / sr)
-    st.pyplot(plt)
     freq = rosa.fft_frequencies(sr=sr, n_fft=frame_length)
     return pd.Series(np.max(S, axis=1), index=freq, name=title)
 
@@ -80,14 +60,14 @@ def rosa_temp_load_series(file_data) -> Tuple[pd.Series, float]:
 
 
 decimation_rates = [1, 2, 4, 8]
-sr = 48000
+if "decimation_rate" not in st.session_state:
+    st.session_state.decimation_rate = 1
 
 st.title("異音チェッカー シミュレーション")
 
 tabOK, tabNG = st.tabs(["🆗 OK", "🆖 NG"])
 
 with tabOK:
-    totalContainer = st.container()
     uploaded_ok = st.file_uploader(
         "OKデータのオーディオファイルをアップロードしてください（複数可）",
         type=["wav", "mp3", "m4a", "aac", "mp4"],
@@ -97,31 +77,32 @@ with tabOK:
     @st.cache_data
     def ok_master(uploaded_ok, d_rate):
         ss = []
-        for uploaded_file in uploaded_ok:
+        master_bar = st.progress(0)
+        for i, uploaded_file in enumerate(uploaded_ok):
             ts, sr = rosa_temp_load_series(uploaded_file)
             y = dspfir.downsample(ts.values, d_rate)
-            s = showWaveSpec(y, sr=sr / d_rate, title=ts.name)
+            s = waveSpec(y, sr=sr / d_rate, title=ts.name)
             ss.append(s)
-
+            master_bar.progress((i + 1) * 100 // len(uploaded_ok))
         smax = pd.concat(ss, axis=1).max(axis=1)
         smax.name = "OKマスター"
-        return smax
+        return smax, sr
 
     if len(uploaded_ok) > 0:
-        with totalContainer:
-            st.write("OKマスターの作成後、NGタブを選択してNGデータをアップロードしてください")
-            decimation_rate = st.radio(
-                "サンプリング周波数(周波数分布の最大値はこの半分)",
-                decimation_rates,
-                horizontal=True,
-                format_func=lambda x: f"{round(sr/x/1000):d}kHz",
-            )
-        ok = ok_master(uploaded_ok, decimation_rate)
-        with totalContainer:
+        with st.spinner("OKマスター作成中"):
+            ok, sr = ok_master(uploaded_ok, st.session_state.decimation_rate)
             sns.relplot(data=ok, aspect=3, kind="line").set(
                 title="OKマスター（最大値）周波数分布", yscale="log", xlim=(0, ok.index[-1])
             ).set_xlabels("Hz").set_ylabels("amplitude")
             plotMod(plt)
+            st.write("OKマスターの作成後、NGタブを選択してNGデータをアップロードしてください")
+            st.radio(
+                "サンプリング周波数(周波数分布の最大値はこの半分)",
+                decimation_rates,
+                key="decimation_rate",
+                horizontal=True,
+                format_func=lambda x: f"{round(sr/x/1000):d}kHz",
+            )
 
 with tabNG:
     if len(uploaded_ok) == 0:
@@ -138,9 +119,9 @@ with tabNG:
         def ng_fft(file, d_rate):
             ng_ts, ng_sr = rosa_temp_load_series(file)
             y = dspfir.downsample(ng_ts.values, d_rate)
-            return showWaveSpec(y, sr=(ng_sr / d_rate), title=ng_ts.name)
+            return waveSpec(y, sr=(ng_sr / d_rate), title=ng_ts.name)
 
-        ng = ng_fft(uploaded_ng, decimation_rate)
+        ng = ng_fft(uploaded_ng, st.session_state.decimation_rate)
 
         ngmax = float(ng.index[-1])
         ngxlim = st.slider("表示周波数範囲", 0.0, ngmax, (0.0, ngmax), 1000.0)
