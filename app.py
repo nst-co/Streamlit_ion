@@ -16,10 +16,9 @@ import streamlit as st
 import librosa as rosa
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import japanize_matplotlib
-import seaborn as sns
 import dspfir
+import plotly.express as px
+from plotly.subplots import make_subplots
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Tuple
@@ -27,18 +26,21 @@ from typing import Tuple
 st.set_page_config(
     page_title="異音チェッカー シミュレーション",
     page_icon="random",
+    layout="wide",
     menu_items={"About": "Copyright 2023 NST Co., Ltd. All rights reserved."},
 )
 
-sns.set("talk", "whitegrid")
-japanize_matplotlib.japanize()
-
 
 def plotMod(plt):
-    plt.minorticks_on()
-    plt.grid(which="major", color="black", alpha=0.5)
-    plt.grid(which="minor", color="gray", linestyle=":")
-    st.pyplot(plt)
+    plt.update_xaxes(showline=True, showgrid=True)
+    plt.update_yaxes(showline=True, showgrid=True)
+    st.plotly_chart(
+        plt,
+        use_container_width=True,
+        config={
+            "toImageButtonOptions": {"filename": plt.layout.title.text, "scale": 2}
+        },
+    )
 
 
 def waveSpec(
@@ -103,11 +105,12 @@ placeholder.empty()
 
 with st.spinner("OKマスター作成中"):
     ok, sr = ok_master(uploaded_ok, st.session_state.decimation_rate)
-    sns.relplot(data=ok, aspect=3, kind="line").set(
-        title="OKマスター（最大値）周波数分布", yscale="log", xlim=(0, ok.index[-1])
-    ).set_xlabels("Hz").set_ylabels("amplitude")
-    plotMod(plt)
+    fig = px.line(
+        ok, log_y=True, labels={"value": "amplitude", "index": "Hz"}
+    ).update_layout(title="OKマスター（最大値）周波数分布", showlegend=False, height=400)
+    plotMod(fig)
 with st.sidebar:
+    st.divider()
     st.radio(
         "サンプリング周波数(周波数分布の最大値はこの半分)",
         decimation_rates,
@@ -115,6 +118,7 @@ with st.sidebar:
         horizontal=True,
         format_func=lambda x: f"{round(sr/x/1000):d}kHz",
     )
+    st.divider()
     uploaded_ng = st.file_uploader(
         "NGデータのオーディオファイルをアップロードしてください（一つのみ）",
         type=["wav", "mp3", "m4a", "aac", "mp4"],
@@ -127,17 +131,31 @@ placeholder.empty()
 
 ng = ng_fft(uploaded_ng, st.session_state.decimation_rate)
 
-ngxlim = (0.0, ng.index[-1])
 
-df = pd.DataFrame({"マスター": ok, "NG": ng})
-sns.relplot(data=df, aspect=3, kind="line", dashes=False, alpha=0.75).set(
-    title=str(ng.name) + "周波数分布比較", yscale="log", xlim=ngxlim
-).set_xlabels("Hz").set_ylabels("amplitude")
-plotMod(plt)
+df = pd.DataFrame({"OKマスター": ok, "NG": ng})
+fig1 = px.line(df, color_discrete_sequence=px.colors.qualitative.Plotly, log_y=True)
+fig1.update_traces(opacity=0.7)
 ngdb = pd.Series(20 * np.log10(ng / ok), name=ng.name)
 okdb = ok.apply(lambda x: 0)
-dfdb = pd.DataFrame({"マスター": okdb, "NG": ngdb})
-sns.relplot(data=dfdb, aspect=3, kind="line", dashes=False).set(
-    title=str(ng.name) + " マスター比周波数分布比較", ylim=(-15, 15), xlim=ngxlim
-).set_xlabels("Hz").set_ylabels("dB")
-plotMod(plt)
+dfdb = pd.DataFrame({"OKマスター": okdb, "NG": ngdb})
+fig2 = px.line(dfdb, color_discrete_sequence=px.colors.qualitative.Plotly)
+fig2.update_traces(showlegend=False, opacity=0.7)
+fig = make_subplots(
+    rows=2,
+    cols=1,
+    subplot_titles=("周波数分布比較", "OKマスター比 周波数分布比較"),
+    shared_xaxes=True,
+    vertical_spacing=0.1,
+).update_layout(
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    xaxis2=dict(title="Hz", rangeslider_visible=True, rangeslider_thickness=0.0625),
+    yaxis=dict(title="amplitude", type="log"),
+    yaxis2=dict(title="dB", range=[-15, 15]),
+    title_text=str(ng.name),
+    height=750,
+)
+for trace in fig1["data"]:
+    fig.add_trace(trace, row=1, col=1)
+for trace in fig2["data"]:
+    fig.add_trace(trace, row=2, col=1)
+plotMod(fig)
