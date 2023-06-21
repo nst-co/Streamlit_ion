@@ -27,7 +27,10 @@ st.set_page_config(
     page_title="異音チェッカー シミュレーション",
     page_icon="random",
     layout="wide",
-    menu_items={"About": "Copyright 2023 NST Co., Ltd. All rights reserved."},
+    menu_items={
+        "Get Help": "https://github.com/nst-co/Streamlit_ion/blob/master/README.md",
+        "About": "Copyright 2023 NST Co., Ltd. All rights reserved.",
+    },
 )
 
 
@@ -150,7 +153,7 @@ fig = make_subplots(
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     xaxis2=dict(title="Hz", rangeslider_visible=True, rangeslider_thickness=0.0625),
     yaxis=dict(title="amplitude", type="log"),
-    yaxis2=dict(title="dB", range=[-15, 15]),
+    yaxis2=dict(title="dB", range=[-14, 14], dtick=2),
     title_text=str(ng.name),
     height=750,
 )
