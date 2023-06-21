@@ -1,4 +1,4 @@
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://[nst-co-streamlit-ion-app-6h19ja.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://nst-co-streamlit-ion-app-6h19ja.streamlit.app)
 # 異音チェッカー シミュレーション
 OKオーディオファイルからマスターを作り、NGオーディオファイルと比較します。これにより、NT-100での異音判定可能か確認できます。
 
