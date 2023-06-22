@@ -162,3 +162,5 @@ for trace in fig1["data"]:
 for trace in fig2["data"]:
     fig.add_trace(trace, row=2, col=1)
 plotMod(fig)
+
+st.write(f"NG-OK比の最大値 **{ngdb.max():.2f}**dB（**{round(ngdb.idxmax())}**Hzにおいて）")
